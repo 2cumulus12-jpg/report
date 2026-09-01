@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>업무 자동화</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+            background-color: #f0f4f8;
+            color: #1a202c;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            padding: 32px;
+        }
+        h1 { margin-top: 0; margin-bottom: 24px; color: #0f172a; font-size: 1.8rem; }
+        
+        .tab-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 14px;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            cursor: pointer;
+            font-size: 0.95rem;
+            font-weight: bold;
+            border-radius: 8px;
+            color: #64748b;
+            transition: all 0.2s;
+            word-break: keep-all;
+        }
+        .tab-btn:hover { background: #e2e8f0; }
+        .tab-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .input-group { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 20px; overflow: hidden; }
+        .input-header { background: #f8fafc; padding: 12px 16px; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; }
+        textarea { width: 100%; height: 200px; border: none; padding: 16px; box-sizing: border-box; font-size: 1rem; resize: none; outline: none; line-height: 1.6; }
+        
+        .result-box { padding: 16px; font-size: 1rem; min-height: 150px; line-height: 1.6; word-break: keep-all; white-space: pre-wrap; }
+        
+        .button-group { display: flex; justify-content: flex-end; gap: 12px; }
+        .action-btn { padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; border: none; transition: 0.2s; }
+        .btn-copy { background-color: #3b82f6; color: white; }
+        .btn-copy:hover { background-color: #2563eb; }
+        .btn-reset { background-color: #64748b; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>업무 자동화</h1>
+        
+        <div class="tab-group">
+            <button class="tab-btn active" id="tab1" onclick="setMode(1)">1. 업체별 시험번호 묶기</button>
+            <button class="tab-btn" id="tab2" onclick="setMode(2)">2. 엑셀용 업체명 추출</button>
+            <button class="tab-btn" id="tab3" onclick="setMode(3)">3. 보고서 전성분 추출</button>
+        </div>
+
+        <div class="input-group">
+            <div class="input-header">원본 텍스트 입력</div>
+            <textarea id="inputText" placeholder="내용을 붙여넣으세요..."></textarea>
+        </div>
+
+        <div class="input-group">
+            <div class="input-header">교정 결과</div>
+            <div class="result-box" id="outputText">텍스트를 입력해 주세요.</div>
+        </div>
+
+        <div class="button-group">
+            <button class="action-btn btn-copy" onclick="copyResult()" id="copyBtn">결과 복사</button>
+            <button class="action-btn btn-reset" onclick="clearText()">입력 초기화</button>
+        </div>
+    </div>
+
+    <script>
+        const inputText = document.getElementById('inputText');
+        const outputText = document.getElementById('outputText');
+        const copyBtn = document.getElementById('copyBtn');
+        
+        let currentMode = 1; 
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('tab' + mode).classList.add('active');
+            processText(); 
+        }
+
+        inputText.addEventListener('input', processText);
+
+        function processText() {
+            let text = inputText.value;
+            
+            if (!text.trim()) {
+                outputText.innerText = '텍스트를 입력해 주세요.';
+                return;
+            }
+
+            // 1번 탭: 업체별 시험번호 그룹화
+            if (currentMode === 1) {
+                let lines = text.split(/[\r\n]+/);
+                let groups = new Map(); 
+
+                lines.forEach(line => {
+                    line = line.trim();
+                    if (!line) return;
+
+                    let parts = line.split(/[\s\t]+/);
+                    if (parts.length >= 2) {
+                        let rawTestNum = parts[0];
+                        let rawCompany = parts.slice(1).join(' ');
+
+                        let testNum = rawTestNum.replace(/[a-zA-Z가-힣]+$/, '');
+                        let company = rawCompany.replace(/\(주\)|주식회사|주\.|㈜/g, '').replace(/\s{2,}/g, ' ').trim();
+
+                        if (!groups.has(company)) {
+                            groups.set(company, []);
+                        }
+                        groups.get(company).push(testNum);
+                    }
+                });
+
+                let resultLines = [];
+                groups.forEach((testNums, company) => {
+                    resultLines.push(company); 
+                    testNums.forEach(num => {
+                        if (num !== '') resultLines.push(num); 
+                    });
+                    resultLines.push(""); 
+                });
+
+                text = resultLines.join('\n').trim();
+            }
+            
+            // 2번 탭: 엑셀용 업체명 추출 (오류 수정됨)
+            else if (currentMode === 2) {
+                let lines = text.split(/[\r\n]+/); 
+                let resultLines = lines.map(line => {
+                    line = line.trim();
+                    if (!line) return '';
+
+                    let parts = line.split(/[\s\t]+/);
+                    let rawCompany = line; // 기본값은 줄 전체
+                    
+                    // 띄어쓰기로 구분되어 있다면 (시험번호 + 업체명 형태) 첫 번째 덩어리(시험번호)는 버림
+                    if (parts.length >= 2) {
+                        rawCompany = parts.slice(1).join(' ');
+                    }
+                    
+                    // 법인명 기호 제거
+                    let cleanCompany = rawCompany.replace(/\(주\)|주식회사|주\.|㈜/g, '');
+                    // 업체명에 포함된 쓸데없는 영어 알파벳 제거
+                    cleanCompany = cleanCompany.replace(/[a-zA-Z]+/g, '');
+                    
+                    return cleanCompany.replace(/\s{2,}/g, ' ').trim();
+                });
+                
+                // 빈 줄 필터링 후 엔터로 연결 (중복값 유지)
+                text = resultLines.filter(line => line !== '').join('\n'); 
+            }
+
+            // 3번 탭: 보고서 전성분 추출 (단어 사이 쉼표 추가)
+            else if (currentMode === 3) {
+                text = text.replace(/[\r\n,]+/g, ' '); 
+                text = text.replace(/\s{2,}/g, ' ').trim(); 
+                text = text.split(' ').join(', '); 
+            }
+
+            outputText.innerText = text;
+        }
+
+        function copyResult() {
+            const text = outputText.innerText;
+            if (text === '텍스트를 입력해 주세요.') return;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = copyBtn.innerText;
+                copyBtn.innerText = '복사 완료!';
+                copyBtn.style.backgroundColor = '#10b981';
+                setTimeout(() => {
+                    copyBtn.innerText = originalText;
+                    copyBtn.style.backgroundColor = '#3b82f6';
+                }, 1500);
+            });
+        }
+
+        function clearText() {
+            inputText.value = '';
+            processText();
+        }
+    </script>
+</body>
+</html>
