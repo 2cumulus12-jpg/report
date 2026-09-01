@@ -231,7 +231,10 @@
                     let rawCompany = parts.slice(1).join(' ');
 
                     let testNum = rawTestNum.replace(/[a-zA-Z가-힣]+$/, '');
-                    let company = rawCompany.replace(/\(주\)|주식회사|주\.|㈜/g, '').replace(/\s{2,}/g, ' ').trim();
+
+                    // 업체명에서 법인명 기호 및 뒤에 붙은 영문 기호(HY, H 등) 제거
+                    let company = rawCompany.replace(/\(주\)|주식회사|주\.|㈜/g, '');
+                    company = company.replace(/[a-zA-Z]+/g, '').replace(/\s{2,}/g, ' ').trim();
 
                     if (!groups.has(company)) groups.set(company, []);
                     groups.get(company).push(testNum);
@@ -282,7 +285,7 @@
             text = resultLines.filter(line => line !== '').join('\n');
         }
 
-        // 5번: 국문 제품명 추출 (한글이 포함된 줄 추출)
+        // 5번: 국문 제품명 추출
         else if (currentMode === 5) {
             let lines = text.split(/[\r\n]+/);
             let resultLines = [];
@@ -290,10 +293,8 @@
                 line = line.trim();
                 if (!line) return;
 
-                // 앞에 '국문:', '국문명:', '제품명:' 같은 접두사가 있으면 우선 떼어냄
                 let cleanLine = line.replace(/^(?:국문(?:명|제품명)?|제품명)\s*[:：]\s*/i, '').trim();
 
-                // 줄에 한글([가-힣])이 적어도 하나 포함되어 있으면 국문 제품명으로 인정
                 if (/[가-힣]/.test(cleanLine)) {
                     resultLines.push(cleanLine);
                 }
@@ -301,7 +302,7 @@
             text = resultLines.join('\n');
         }
 
-        // 6번: 영문 제품명 추출 (한글이 없고 영어가 포함된 줄 추출)
+        // 6번: 영문 제품명 추출
         else if (currentMode === 6) {
             let lines = text.split(/[\r\n]+/);
             let resultLines = [];
@@ -309,10 +310,8 @@
                 line = line.trim();
                 if (!line) return;
 
-                // 앞에 '영문:', '영문명:', 'Eng:' 같은 접두사가 있으면 우선 떼어냄
                 let cleanLine = line.replace(/^(?:영문(?:명|제품명)?|eng(?:lish)?)\s*[:：]\s*/i, '').trim();
 
-                // 줄에 한글([가-힣])이 전혀 없고, 영어 알파벳([a-zA-Z])이 포함되어 있다면 영문 제품명으로 인정
                 if (!/[가-힣]/.test(cleanLine) && /[a-zA-Z]/.test(cleanLine)) {
                     resultLines.push(cleanLine);
                 }
