@@ -185,7 +185,7 @@
 
     const modeInfo = {
         1: { title: "1. 업체별 시험번호 묶기", desc: "엑셀에서 복사한 '시험번호 업체명' 데이터를 업체별로 묶어 정렬합니다." },
-        2: { title: "2. 엑셀용 업체명 추출", desc: "시험번호나 법인명(주식회사 등), 개선율 등의 문구를 지우고 깔끔한 업체명만 한 줄씩 추출합니다." },
+        2: { title: "2. 엑셀용 업체명 추출", desc: "시험번호, 법인명, 특수기호, 비고 문구를 제거하고 순수 업체명만 추출합니다." },
         3: { title: "3. 보고서 전성분 추출", desc: "엔터나 공백으로 나뉜 단어들 사이에 쉼표(,)를 자동으로 넣어줍니다." },
         4: { title: "4. 숫자 추가", desc: "각 줄의 맨 앞에 1), 2), 3)... 번호를 순서대로 붙여 리스트를 확인하기 쉽게 만듭니다." },
         5: { title: "5. 국문 제품명 추출", desc: "입력된 텍스트에서 한글이 포함된 국문 제품명만 골라 한 줄씩 추출합니다." },
@@ -205,12 +205,34 @@
 
     inputText.addEventListener('input', processText);
 
-    // 공통 업체명 정제 함수 (개선율, 법인명, 끝자리 영문 기호 제거)
+    // 1줄에서 [시험번호, 업체명영역] 파싱 (공백 없이 붙어있는 케이스도 커버)
+    function parseLine(line) {
+        line = line.trim();
+        if (!line) return null;
+
+        // 패턴 1: 구분자(공백, 탭, 언더바)가 있는 경우
+        let m = line.match(/^([가-힣a-zA-Z0-9\-]+)[\s\t_]+(.+)$/);
+        if (m) {
+            return { testNum: m[1], rawCompany: m[2] };
+        }
+
+        // 패턴 2: 띄어쓰기 없이 붙어있는 경우 (예: HM-P26-0664(주)미네랄하우스S)
+        let mAttached = line.match(/^([가-힣a-zA-Z0-9]+-[a-zA-Z0-9]+-\d+)(.*)$/);
+        if (mAttached) {
+            return { testNum: mAttached[1], rawCompany: mAttached[2] };
+        }
+
+        return { testNum: '', rawCompany: line };
+    }
+
+    // 업체명 노이즈(법인명, 기호, 영문 잡음, 개선율 등) 완벽 정제
     function sanitizeCompany(raw) {
-        let name = raw.replace(/\(주\)|주식회사|주\.|㈜/g, '');
-        name = name.replace(/개선율/g, '');
-        name = name.replace(/[a-zA-Z]+/g, '');
-        return name.replace(/[\-_]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+        let name = raw.replace(/\(주\)|주식회사|주\.|㈜/g, ' ');
+        name = name.replace(/개선율/g, ' ');
+        name = name.replace(/[a-zA-Z]+/g, ' ');
+        // +, -, _, /, &, 특수기호 잔해 정리
+        name = name.replace(/[\+\-_/\\&~*]/g, ' ');
+        return name.replace(/\s{2,}/g, ' ').trim();
     }
 
     function processText() {
@@ -227,19 +249,15 @@
             let groups = new Map();
 
             lines.forEach(line => {
-                line = line.trim();
-                if (!line) return;
+                let parsed = parseLine(line);
+                if (!parsed || !parsed.testNum) return;
 
-                // 공백, 탭뿐만 아니라 '_' 로 연결된 시험번호-업체명 패턴도 분리
-                let match = line.match(/^([가-힣a-zA-Z0-9\-]+)[\s\t_]+(.+)$/);
-                if (match) {
-                    let testNum = match[1].replace(/[a-zA-Z가-힣]+$/, '').trim();
-                    let company = sanitizeCompany(match[2]);
+                let testNum = parsed.testNum.replace(/[a-zA-Z가-힣]+$/, '').trim();
+                let company = sanitizeCompany(parsed.rawCompany);
 
-                    if (company) {
-                        if (!groups.has(company)) groups.set(company, []);
-                        groups.get(company).push(testNum);
-                    }
+                if (company) {
+                    if (!groups.has(company)) groups.set(company, []);
+                    groups.get(company).push(testNum);
                 }
             });
 
@@ -256,16 +274,9 @@
         else if (currentMode === 2) {
             let lines = text.split(/[\r\n]+/);
             let resultLines = lines.map(line => {
-                line = line.trim();
-                if (!line) return '';
-
-                let rawCompany = line;
-                let match = line.match(/^([가-힣a-zA-Z0-9\-]+)[\s\t_]+(.+)$/);
-                if (match) {
-                    rawCompany = match[2];
-                }
-
-                return sanitizeCompany(rawCompany);
+                let parsed = parseLine(line);
+                if (!parsed) return '';
+                return sanitizeCompany(parsed.rawCompany);
             });
             text = resultLines.filter(line => line !== '').join('\n');
         }
