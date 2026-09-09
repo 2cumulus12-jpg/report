@@ -24,7 +24,7 @@
             border-radius: 16px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
             overflow: hidden;
-            min-height: 620px;
+            min-height: 640px;
         }
         .sidebar {
             width: 280px;
@@ -149,6 +149,7 @@
         <button class="menu-btn" id="btn4" onclick="setMode(4)">4. 숫자 추가</button>
         <button class="menu-btn" id="btn5" onclick="setMode(5)">5. 국문 제품명 추출</button>
         <button class="menu-btn" id="btn6" onclick="setMode(6)">6. 영문 제품명 추출</button>
+        <button class="menu-btn" id="btn7" onclick="setMode(7)">7. 중복값 제거</button>
     </div>
 
     <div class="main-content">
@@ -189,7 +190,8 @@
         3: { title: "3. 보고서 전성분 추출", desc: "엔터나 공백으로 나뉜 단어들 사이에 쉼표(,)를 자동으로 넣어줍니다." },
         4: { title: "4. 숫자 추가", desc: "각 줄의 맨 앞에 1), 2), 3)... 번호를 순서대로 붙여 리스트를 확인하기 쉽게 만듭니다." },
         5: { title: "5. 국문 제품명 추출", desc: "입력된 텍스트에서 한글이 포함된 국문 제품명만 골라 한 줄씩 추출합니다." },
-        6: { title: "6. 영문 제품명 추출", desc: "입력된 텍스트에서 한글이 없는 영문 제품명만 골라 한 줄씩 추출합니다." }
+        6: { title: "6. 영문 제품명 추출", desc: "입력된 텍스트에서 한글이 없는 영문 제품명만 골라 한 줄씩 추출합니다." },
+        7: { title: "7. 중복값 제거", desc: "엑셀 복사 시 딸려오는 큰따옴표(\") 및 불필요한 기호를 지우고 중복 줄을 깔끔하게 제거합니다." }
     };
 
     function setMode(mode) {
@@ -205,18 +207,15 @@
 
     inputText.addEventListener('input', processText);
 
-    // 1줄에서 [시험번호, 업체명영역] 파싱 (공백 없이 붙어있는 케이스도 커버)
     function parseLine(line) {
         line = line.trim();
         if (!line) return null;
 
-        // 패턴 1: 구분자(공백, 탭, 언더바)가 있는 경우
         let m = line.match(/^([가-힣a-zA-Z0-9\-]+)[\s\t_]+(.+)$/);
         if (m) {
             return { testNum: m[1], rawCompany: m[2] };
         }
 
-        // 패턴 2: 띄어쓰기 없이 붙어있는 경우 (예: HM-P26-0664(주)미네랄하우스S)
         let mAttached = line.match(/^([가-힣a-zA-Z0-9]+-[a-zA-Z0-9]+-\d+)(.*)$/);
         if (mAttached) {
             return { testNum: mAttached[1], rawCompany: mAttached[2] };
@@ -225,13 +224,11 @@
         return { testNum: '', rawCompany: line };
     }
 
-    // 업체명 노이즈(법인명, 기호, 영문 잡음, 개선율 등) 완벽 정제
     function sanitizeCompany(raw) {
         let name = raw.replace(/\(주\)|주식회사|주\.|㈜/g, ' ');
         name = name.replace(/개선율/g, ' ');
         name = name.replace(/[a-zA-Z]+/g, ' ');
-        // +, -, _, /, &, 특수기호 잔해 정리
-        name = name.replace(/[\+\-_/\\&~*]/g, ' ');
+        name = name.replace(/[\+\-_/\\&~*"]/g, ' ');
         return name.replace(/\s{2,}/g, ' ').trim();
     }
 
@@ -324,6 +321,24 @@
                 if (!line) return;
                 let cleanLine = line.replace(/^(?:영문(?:명|제품명)?|eng(?:lish)?)\s*[:：]\s*/i, '').trim();
                 if (!/[가-힣]/.test(cleanLine) && /[a-zA-Z]/.test(cleanLine)) {
+                    resultLines.push(cleanLine);
+                }
+            });
+            text = resultLines.join('\n');
+        }
+
+        // 7번: 중복값 제거 (엑셀 따옴표 등 제거)
+        else if (currentMode === 7) {
+            let lines = text.split(/[\r\n]+/);
+            let seen = new Set();
+            let resultLines = [];
+
+            lines.forEach(line => {
+                // 엑셀에서 복사할 때 생기는 앞뒤 따옴표 및 내부 큰따옴표("", ") 제거
+                let cleanLine = line.replace(/["“”]/g, '').trim();
+
+                if (cleanLine && !seen.has(cleanLine)) {
+                    seen.add(cleanLine);
                     resultLines.push(cleanLine);
                 }
             });
