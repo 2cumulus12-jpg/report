@@ -207,16 +207,18 @@
 
     inputText.addEventListener('input', processText);
 
-    // 1줄에서 [시험번호, 업체명영역] 파싱
+    // 줄 파싱: 시험번호와 업체명 영역 분리
     function parseLine(line) {
         line = line.trim();
         if (!line) return null;
 
+        // 패턴 1: 띄어쓰기, 탭, _ 로 구분된 경우
         let m = line.match(/^([가-힣a-zA-Z0-9\-]+)[\s\t_]+(.+)$/);
         if (m) {
             return { testNum: m[1], rawCompany: m[2] };
         }
 
+        // 패턴 2: 공백 없이 붙어있는 경우 (예: HM-P26-1039(주)코스바이오...)
         let mAttached = line.match(/^([가-힣a-zA-Z0-9]+-[a-zA-Z0-9]+-\d+)(.*)$/);
         if (mAttached) {
             return { testNum: mAttached[1], rawCompany: mAttached[2] };
@@ -225,17 +227,36 @@
         return { testNum: '', rawCompany: line };
     }
 
-    // 업체명 노이즈(법인명, 시험/비고 문구, 기호, 잡음 알파벳) 완벽 정제
+    // 업체명 완벽 정제 함수
     function sanitizeCompany(raw) {
+        if (!raw) return '';
+
+        // 1. 법인명 표기 제거
         let name = raw.replace(/\(주\)|주식회사|주\.|㈜/g, ' ');
 
-        // ★ 핵심: 시험/임상 비고 키워드가 등장하면 그 지점부터 뒷부분을 싹 제거
-        // (예: 피부, 탄력, 개선, 개선율, 보습, 주름, 미백, Raw data 등)
-        name = name.split(/(?:\s+(?:피부|겉\s*탄력|속\s*탄력|탄력|개선|개선율|보습|주름|미백|외|LAB|Raw|data)\b)|개선율/i)[0];
+        // 2. 시험 항목/비고 단어 목록 (이 단어가 나오는 순간부터 뒤쪽은 무조건 삭제)
+        const stopWords = ['피부', '탄력', '개선', '개선율', '보습', '주름', '미백', '진정', '모공', '각질', '피지', '외', 'lab', 'raw', 'data'];
 
-        // 남은 잔여 알파벳, 기호 정리
+        // 공백 기준으로 토큰 분리 후 검사
+        let tokens = name.trim().split(/[\s_]+/);
+        let cleanTokens = [];
+
+        for (let token of tokens) {
+            let lower = token.toLowerCase();
+            // 단어 안에 스톱워드가 포함되어 있는지 검사 (예: "개선율", "외y", "탄력개선")
+            let hasStopWord = stopWords.some(sw => lower.includes(sw));
+            if (hasStopWord) {
+                break; // 비고 키워드를 만나면 그 뒤는 전부 버림
+            }
+            cleanTokens.push(token);
+        }
+
+        name = cleanTokens.join(' ');
+
+        // 3. 영문자, 특수기호 잔해 제거
         name = name.replace(/[a-zA-Z]+/g, ' ');
         name = name.replace(/[\+\-_/\\&~*"]/g, ' ');
+        
         return name.replace(/\s{2,}/g, ' ').trim();
     }
 
