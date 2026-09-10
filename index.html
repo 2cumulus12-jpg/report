@@ -186,7 +186,7 @@
 
     const modeInfo = {
         1: { title: "1. 업체별 시험번호 묶기", desc: "엑셀에서 복사한 '시험번호 업체명' 데이터를 업체별로 묶어 정렬합니다." },
-        2: { title: "2. 엑셀용 업체명 추출", desc: "시험번호, 법인명, 특수기호, 비고 문구를 제거하고 순수 업체명만 추출합니다." },
+        2: { title: "2. 엑셀용 업체명 추출", desc: "시험번호, 법인명, 특수기호, 비고/시험명 문구를 제거하고 순수 업체명만 추출합니다." },
         3: { title: "3. 보고서 전성분 추출", desc: "엔터나 공백으로 나뉜 단어들 사이에 쉼표(,)를 자동으로 넣어줍니다." },
         4: { title: "4. 숫자 추가", desc: "각 줄의 맨 앞에 1), 2), 3)... 번호를 순서대로 붙여 리스트를 확인하기 쉽게 만듭니다." },
         5: { title: "5. 국문 제품명 추출", desc: "입력된 텍스트에서 한글이 포함된 국문 제품명만 골라 한 줄씩 추출합니다." },
@@ -207,6 +207,7 @@
 
     inputText.addEventListener('input', processText);
 
+    // 1줄에서 [시험번호, 업체명영역] 파싱
     function parseLine(line) {
         line = line.trim();
         if (!line) return null;
@@ -224,9 +225,15 @@
         return { testNum: '', rawCompany: line };
     }
 
+    // 업체명 노이즈(법인명, 시험/비고 문구, 기호, 잡음 알파벳) 완벽 정제
     function sanitizeCompany(raw) {
         let name = raw.replace(/\(주\)|주식회사|주\.|㈜/g, ' ');
-        name = name.replace(/개선율/g, ' ');
+
+        // ★ 핵심: 시험/임상 비고 키워드가 등장하면 그 지점부터 뒷부분을 싹 제거
+        // (예: 피부, 탄력, 개선, 개선율, 보습, 주름, 미백, Raw data 등)
+        name = name.split(/(?:\s+(?:피부|겉\s*탄력|속\s*탄력|탄력|개선|개선율|보습|주름|미백|외|LAB|Raw|data)\b)|개선율/i)[0];
+
+        // 남은 잔여 알파벳, 기호 정리
         name = name.replace(/[a-zA-Z]+/g, ' ');
         name = name.replace(/[\+\-_/\\&~*"]/g, ' ');
         return name.replace(/\s{2,}/g, ' ').trim();
@@ -327,16 +334,14 @@
             text = resultLines.join('\n');
         }
 
-        // 7번: 중복값 제거 (엑셀 따옴표 등 제거)
+        // 7번: 중복값 제거
         else if (currentMode === 7) {
             let lines = text.split(/[\r\n]+/);
             let seen = new Set();
             let resultLines = [];
 
             lines.forEach(line => {
-                // 엑셀에서 복사할 때 생기는 앞뒤 따옴표 및 내부 큰따옴표("", ") 제거
                 let cleanLine = line.replace(/["“”]/g, '').trim();
-
                 if (cleanLine && !seen.has(cleanLine)) {
                     seen.add(cleanLine);
                     resultLines.push(cleanLine);
