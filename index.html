@@ -187,7 +187,7 @@
     const modeInfo = {
         1: { title: "1. 업체별 시험번호 묶기", desc: "엑셀에서 복사한 '시험번호 업체명' 데이터를 업체별로 묶어 정렬합니다." },
         2: { title: "2. 엑셀용 업체명 추출", desc: "시험번호, 법인명, 특수기호, 비고/시험명 문구를 제거하고 순수 업체명만 추출합니다." },
-        3: { title: "3. 보고서 전성분 추출", desc: "엔터나 공백으로 나뉜 단어들 사이에 쉼표(,)를 자동으로 넣어줍니다." },
+        3: { title: "3. 보고서 전성분 추출", desc: "엑셀 복사 따옴표(\")와 공백을 지우고 쉼표(,)로 성분을 정렬합니다." },
         4: { title: "4. 숫자 추가", desc: "각 줄의 맨 앞에 1), 2), 3)... 번호를 순서대로 붙여 리스트를 확인하기 쉽게 만듭니다." },
         5: { title: "5. 국문 제품명 추출", desc: "입력된 텍스트에서 한글이 포함된 국문 제품명만 골라 한 줄씩 추출합니다." },
         6: { title: "6. 영문 제품명 추출", desc: "입력된 텍스트에서 한글이 없는 영문 제품명만 골라 한 줄씩 추출합니다." },
@@ -227,10 +227,8 @@
     function sanitizeCompany(raw) {
         if (!raw) return '';
 
-        // (유), 유한회사, (주), 주식회사 등 법인 형태 제거
         let name = raw.replace(/\((?:주|유|합|사|재)\)|주식회사|유한회사|주\.|㈜|㈲/g, ' ');
 
-        // 비고, 시험항목, 데이터 라벨 단어 제거
         const stopWords = [
             '피부', '탄력', '개선', '개선율', '보습', '주름', '미백', '진정', '모공', 
             '각질', '피지', '외', '결과데이터', '결과', '데이터', 'lab', 'raw', 'data'
@@ -242,9 +240,7 @@
         for (let token of tokens) {
             let lower = token.toLowerCase();
             let hasStopWord = stopWords.some(sw => lower.includes(sw));
-            if (hasStopWord) {
-                break;
-            }
+            if (hasStopWord) break;
             cleanTokens.push(token);
         }
 
@@ -308,10 +304,24 @@
             text = resultLines.filter(line => line !== '' && !isInvalidCompany(line)).join('\n');
         }
 
-        // 3번: 보고서 전성분 추출
+        // 3번: 보고서 전성분 추출 (따옴표 및 다중 공백 제거)
         else if (currentMode === 3) {
-            text = text.replace(/[\r\n,]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
-            text = text.split(' ').join(', ');
+            // 1) 엑셀의 큰따옴표 및 특수 따옴표 제거
+            let clean = text.replace(/["“”'‘’]/g, '');
+
+            // 2) 줄바꿈과 쉼표 기준으로 각 성분 분리
+            let rawList = clean.split(/[\r\n,]+/);
+
+            let ingredients = [];
+            rawList.forEach(item => {
+                // 내부의 2개 이상 연속 공백은 1개로 줄이고 양쪽 공백 트림
+                let trimmed = item.replace(/\s{2,}/g, ' ').trim();
+                if (trimmed) {
+                    ingredients.push(trimmed);
+                }
+            });
+
+            text = ingredients.join(', ');
         }
 
         // 4번: 숫자 추가
