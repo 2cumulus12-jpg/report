@@ -207,14 +207,10 @@
 
     inputText.addEventListener('input', processText);
 
-    // 줄 파싱: 끝에 -1, -2 등 차수 번호가 붙은 시험번호까지 완벽 포괄
     function parseLine(line) {
         line = line.trim();
         if (!line) return null;
 
-        // 패턴 설명:
-        // (?:^[가-힣]{1,2}\s*)? : 맨 앞의 국/영/중 및 공백
-        // ([A-Za-z]{2,}-[A-Za-z0-9]+-\d+(?:-\d+)?) : 기본 시험번호 + (선택: -1, -2 등의 추가 하이픈 번호)
         let regex = /(?:^[가-힣]{1,2}\s*)?([A-Za-z]{2,}-[A-Za-z0-9]+-\d+(?:-\d+)?)(.*)$/;
         let match = line.match(regex);
 
@@ -224,7 +220,6 @@
             return { testNum: testNum, rawCompany: rawCompany };
         }
 
-        // 일반 공백 구분 형태 처리
         let parts = line.split(/[\s\t_]+/);
         if (parts.length >= 2) {
             return { testNum: parts[0], rawCompany: parts.slice(1).join(' ') };
@@ -233,25 +228,27 @@
         return { testNum: '', rawCompany: line };
     }
 
-    // 업체명 정제 함수
     function sanitizeCompany(raw) {
         if (!raw) return '';
 
         let name = raw;
 
-        // 1. 앞머리에 붙은 엑셀 행번호 숫자나 하이픈 기호 제거
+        // 1. 앞머리 번호, 하이픈 등 제거
         name = name.replace(/^[\d\-\.\)]+\s*/, '');
 
         // 2. 법인명 및 관련 기호 제거
         name = name.replace(/\((?:주|유|합|사|재)\)|주식회사|유한회사|주\.|㈜|㈲/g, ' ');
 
-        // 3. 괄호로 둘러싸인 비고 제거 (예: (보고서+CRF), (보고서), (보고서 ) 등)
+        // 3. 괄호 비고 제거 (예: (보고서+CRF))
         name = name.replace(/\([^)]*\)/g, ' ');
 
-        // 4. 비고/시험항목/보고서 키워드 등장 시 그 뒤를 모두 삭제
+        // 4. 주차 표기 제거 (예: 2주, 4주 등)
+        name = name.replace(/\d+주\b/g, ' ');
+
+        // 5. 비고 키워드 (lab 제거 완료)
         const stopWords = [
             '피부', '탄력', '개선', '개선율', '보습', '주름', '미백', '진정', '모공', 
-            '각질', '피지', '외', '결과데이터', '결과', '데이터', '보고서', 'crf', 'lab', 'raw', 'data'
+            '각질', '피지', '외', '결과데이터', '결과', '데이터', '보고서', 'crf'
         ];
 
         let tokens = name.trim().split(/[\s_]+/);
@@ -266,14 +263,14 @@
 
         name = cleanTokens.join(' ');
 
-        // 5. 영문 단독 글자(H, h, y 등) 및 특수문자 제거
-        name = name.replace(/[a-zA-Z]+/g, ' ');
+        // 6. 단독 알파벳 및 특수기호 정리 (단어 내 포함된 LAB 등은 유지되도록 한 글자 또는 단독 알파벳 위주 처리)
+        name = name.replace(/\b[A-Za-z]\b/g, ' ');
         name = name.replace(/[\+\-_/\\&~*\"\'\(\)\[\]]/g, ' ');
 
         return name.replace(/\s{2,}/g, ' ').trim();
     }
 
-    const excludeList = ['결과데이터', '데이터', '결과', 'rawdata', 'lab', '보고서', 'crf'];
+    const excludeList = ['결과데이터', '데이터', '결과', 'rawdata', '보고서', 'crf'];
     function isInvalidCompany(name) {
         if (!name) return true;
         let compact = name.replace(/\s+/g, '').toLowerCase();
@@ -316,15 +313,17 @@
                 text = resultLines.join('\n').trim();
             }
 
-            // 2번: 엑셀용 업체명 추출
+            // 2번: 엑셀용 업체명 추출 (행 수 1:1 보존)
             else if (currentMode === 2) {
-                let lines = text.split(/[\r\n]+/);
+                let lines = text.split(/\r?\n/);
                 let resultLines = lines.map(line => {
+                    if (!line.trim()) return '';
                     let parsed = parseLine(line);
                     if (!parsed) return '';
-                    return sanitizeCompany(parsed.rawCompany);
+                    let cleaned = sanitizeCompany(parsed.rawCompany);
+                    return isInvalidCompany(cleaned) ? '' : cleaned;
                 });
-                text = resultLines.filter(line => line !== '' && !isInvalidCompany(line)).join('\n');
+                text = resultLines.join('\n');
             }
 
             // 3번: 보고서 전성분 추출
@@ -398,7 +397,7 @@
                 text = resultLines.join('\n');
             }
 
-            outputText.innerText = text || '결과가 없습니다.';
+            outputText.innerText = text;
         } catch (err) {
             outputText.innerText = '처리 중 오류가 발생했습니다.';
             console.error(err);
@@ -407,7 +406,7 @@
 
     function copyResult() {
         const text = outputText.innerText;
-        if (text === '텍스트를 입력해 주세요.' || text === '결과가 없습니다.' || text === '처리 중 오류가 발생했습니다.') return;
+        if (!text || text === '텍스트를 입력해 주세요.' || text === '처리 중 오류가 발생했습니다.') return;
 
         navigator.clipboard.writeText(text).then(() => {
             const originalText = copyBtn.innerText;
