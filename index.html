@@ -236,16 +236,16 @@
         // 1. 앞머리 번호, 하이픈 등 제거
         name = name.replace(/^[\d\-\.\)]+\s*/, '');
 
-        // 2. 비고 구분 특수기호(>, ▶, →, |, 등) 뒷부분 전체 잘라내기
+        // 2. 비고 구분 특수기호 뒷부분 전체 제거
         name = name.replace(/[\>▶→\|].*$/, '');
 
         // 3. 법인명 및 관련 기호 제거
         name = name.replace(/\((?:주|유|합|사|재)\)|주식회사|유한회사|주\.|㈜|㈲/g, ' ');
 
-        // 4. 괄호로 둘러싸인 비고 전체 제거 (예: (보고서+CRF), (보고서) 등)
+        // 4. 괄호 비고 전체 제거
         name = name.replace(/\([^)]*\)/g, ' ');
 
-        // 5. 비고 키워드 목록 (등장 시 해당 토큰부터 뒤쪽을 모두 버림)
+        // 5. 비고 키워드 목록
         const stopWords = [
             '피부', '탄력', '개선', '개선율', '보습', '주름', '미백', '진정', '모공', 
             '각질', '피지', '외', '결과데이터', '결과', '데이터', '보고서', 'crf',
@@ -258,25 +258,25 @@
         for (let token of tokens) {
             let lower = token.toLowerCase();
 
-            // 주차 표기(예: 2주, 4주, 2주차 등) 필터링
-            if (/^\d+주(?:차)?$/.test(token)) {
-                break;
-            }
+            if (/^\d+주(?:차)?$/.test(token)) break;
 
-            // 비고 키워드 포함 검사
             let hasStopWord = stopWords.some(sw => lower.includes(sw));
-            if (hasStopWord) {
-                break;
-            }
+            if (hasStopWord) break;
 
             cleanTokens.push(token);
         }
 
         name = cleanTokens.join(' ');
 
-        // 6. 단독 끝머리 영문 약어 제거 (예: Hy, Yh, H, h, y, B 등 꼬리표로 붙은 알파벳들)
-        // 단, LAB은 정식 업체명으로 보호
-        name = name.replace(/\s+(?!LAB\b)[A-Za-z]{1,3}\s*$/g, '');
+        // 6. LAB 보호 및 꼬리 영문 제거
+        // 6-1. 정식 업체명 단어 LAB을 임시 보존 토큰(__KEEP_LAB__)으로 치환
+        name = name.replace(/LAB\b/g, '__KEEP_LAB__');
+
+        // 6-2. 공백 유무와 상관없이 끝에 붙은 1~3자리 영문(S, y, h, B, Hy 등) 제거
+        name = name.replace(/[A-Za-z]{1,3}\s*$/g, '');
+
+        // 6-3. 보존 토큰을 다시 LAB으로 복구
+        name = name.replace(/__KEEP_LAB__/g, 'LAB');
 
         // 7. 잔여 특수기호 정리
         name = name.replace(/[\+\-_/\\&~*\"\'\(\)\[\]]/g, ' ');
