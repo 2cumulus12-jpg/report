@@ -207,19 +207,22 @@
 
     inputText.addEventListener('input', processText);
 
+    // 줄 파싱: 앞의 국/영/중 접두어를 시험번호에 온전히 보존
     function parseLine(line) {
         line = line.trim();
         if (!line) return null;
 
-        let regex = /(?:^[가-힣]{1,2}\s*)?([A-Za-z]{2,}-[A-Za-z0-9]+-\d+(?:-\d+)?)(.*)$/;
+        // 패턴: (선택 접두어: 국/영/중 등 1~2자 + 공백) + (시험코드 영문2자리-영문숫자-숫자4자리 + 차수번호 -1, -2 등)
+        let regex = /^((?:[가-힣]{1,2}\s*)?[A-Za-z]{2,}-[A-Za-z0-9]+-\d+(?:-\d+)?)(.*)$/;
         let match = line.match(regex);
 
         if (match) {
-            let testNum = match[1];
+            let testNum = match[1].trim(); // '영HI-P26-0116' 또는 '국 HM-P26-0114' 전체를 그대로 보존
             let rawCompany = (match[2] || '').trim();
             return { testNum: testNum, rawCompany: rawCompany };
         }
 
+        // 시험번호 패턴 매칭이 안 된 행 분리
         let parts = line.split(/[\s\t_]+/);
         if (parts.length >= 2) {
             return { testNum: parts[0], rawCompany: parts.slice(1).join(' ') };
@@ -269,13 +272,8 @@
         name = cleanTokens.join(' ');
 
         // 6. LAB 보호 및 꼬리 영문 제거
-        // 6-1. 정식 업체명 단어 LAB을 임시 보존 토큰(__KEEP_LAB__)으로 치환
         name = name.replace(/LAB\b/g, '__KEEP_LAB__');
-
-        // 6-2. 공백 유무와 상관없이 끝에 붙은 1~3자리 영문(S, y, h, B, Hy 등) 제거
         name = name.replace(/[A-Za-z]{1,3}\s*$/g, '');
-
-        // 6-3. 보존 토큰을 다시 LAB으로 복구
         name = name.replace(/__KEEP_LAB__/g, 'LAB');
 
         // 7. 잔여 특수기호 정리
@@ -300,7 +298,7 @@
         }
 
         try {
-            // 1번: 업체별 시험번호 묶기
+            // 1번: 업체별 시험번호 묶기 (영/국 접두어 온전히 유지)
             if (currentMode === 1) {
                 let lines = text.split(/[\r\n]+/);
                 let groups = new Map();
@@ -309,7 +307,7 @@
                     let parsed = parseLine(line);
                     if (!parsed || !parsed.testNum) return;
 
-                    let testNum = parsed.testNum.trim();
+                    let testNum = parsed.testNum; // 원본 시험번호 그대로 유지
                     let company = sanitizeCompany(parsed.rawCompany);
 
                     if (company && !isInvalidCompany(company)) {
