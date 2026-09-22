@@ -189,8 +189,8 @@
         2: { title: "2. 엑셀용 업체명 추출", desc: "시험번호, 법인명, 특수기호, 비고/시험명 문구를 제거하고 순수 업체명만 추출합니다." },
         3: { title: "3. 보고서 전성분 추출", desc: "엑셀 복사 따옴표(\")와 공백을 지우고 쉼표(,)로 성분을 정렬합니다." },
         4: { title: "4. 숫자 추가", desc: "각 줄의 맨 앞에 1), 2), 3)... 번호를 순서대로 붙여 리스트를 확인하기 쉽게 만듭니다." },
-        5: { title: "5. 국문 제품명 추출", desc: "입력된 텍스트에서 한글이 포함된 국문 제품명만 골라 한 줄씩 추출합니다." },
-        6: { title: "6. 영문 제품명 추출", desc: "입력된 텍스트에서 한글이 없는 영문 제품명만 골라 한 줄씩 추출합니다." },
+        5: { title: "5. 국문 제품명 추출", desc: "입력된 텍스트에서 '국문:', 따옴표, 비고를 제거하고 순수 국문 제품명만 추출합니다." },
+        6: { title: "6. 영문 제품명 추출", desc: "입력된 텍스트에서 '영문:', 따옴표, 비고를 제거하고 순수 영문 제품명만 추출합니다." },
         7: { title: "7. 중복값 제거", desc: "엑셀 복사 시 딸려오는 큰따옴표(\") 및 불필요한 기호를 지우고 중복 줄을 깔끔하게 제거합니다." }
     };
 
@@ -207,22 +207,19 @@
 
     inputText.addEventListener('input', processText);
 
-    // 줄 파싱: 앞의 국/영/중 접두어를 시험번호에 온전히 보존
     function parseLine(line) {
         line = line.trim();
         if (!line) return null;
 
-        // 패턴: (선택 접두어: 국/영/중 등 1~2자 + 공백) + (시험코드 영문2자리-영문숫자-숫자4자리 + 차수번호 -1, -2 등)
         let regex = /^((?:[가-힣]{1,2}\s*)?[A-Za-z]{2,}-[A-Za-z0-9]+-\d+(?:-\d+)?)(.*)$/;
         let match = line.match(regex);
 
         if (match) {
-            let testNum = match[1].trim(); // '영HI-P26-0116' 또는 '국 HM-P26-0114' 전체를 그대로 보존
+            let testNum = match[1].trim();
             let rawCompany = (match[2] || '').trim();
             return { testNum: testNum, rawCompany: rawCompany };
         }
 
-        // 시험번호 패턴 매칭이 안 된 행 분리
         let parts = line.split(/[\s\t_]+/);
         if (parts.length >= 2) {
             return { testNum: parts[0], rawCompany: parts.slice(1).join(' ') };
@@ -235,20 +232,11 @@
         if (!raw) return '';
 
         let name = raw;
-
-        // 1. 앞머리 번호, 하이픈 등 제거
         name = name.replace(/^[\d\-\.\)]+\s*/, '');
-
-        // 2. 비고 구분 특수기호 뒷부분 전체 제거
         name = name.replace(/[\>▶→\|].*$/, '');
-
-        // 3. 법인명 및 관련 기호 제거
         name = name.replace(/\((?:주|유|합|사|재)\)|주식회사|유한회사|주\.|㈜|㈲/g, ' ');
-
-        // 4. 괄호 비고 전체 제거
         name = name.replace(/\([^)]*\)/g, ' ');
 
-        // 5. 비고 키워드 목록
         const stopWords = [
             '피부', '탄력', '개선', '개선율', '보습', '주름', '미백', '진정', '모공', 
             '각질', '피지', '외', '결과데이터', '결과', '데이터', '보고서', 'crf',
@@ -260,23 +248,16 @@
 
         for (let token of tokens) {
             let lower = token.toLowerCase();
-
             if (/^\d+주(?:차)?$/.test(token)) break;
-
             let hasStopWord = stopWords.some(sw => lower.includes(sw));
             if (hasStopWord) break;
-
             cleanTokens.push(token);
         }
 
         name = cleanTokens.join(' ');
-
-        // 6. LAB 보호 및 꼬리 영문 제거
         name = name.replace(/LAB\b/g, '__KEEP_LAB__');
         name = name.replace(/[A-Za-z]{1,3}\s*$/g, '');
         name = name.replace(/__KEEP_LAB__/g, 'LAB');
-
-        // 7. 잔여 특수기호 정리
         name = name.replace(/[\+\-_/\\&~*\"\'\(\)\[\]]/g, ' ');
 
         return name.replace(/\s{2,}/g, ' ').trim();
@@ -298,7 +279,7 @@
         }
 
         try {
-            // 1번: 업체별 시험번호 묶기 (영/국 접두어 온전히 유지)
+            // 1번: 업체별 시험번호 묶기
             if (currentMode === 1) {
                 let lines = text.split(/[\r\n]+/);
                 let groups = new Map();
@@ -307,7 +288,7 @@
                     let parsed = parseLine(line);
                     if (!parsed || !parsed.testNum) return;
 
-                    let testNum = parsed.testNum; // 원본 시험번호 그대로 유지
+                    let testNum = parsed.testNum;
                     let company = sanitizeCompany(parsed.rawCompany);
 
                     if (company && !isInvalidCompany(company)) {
@@ -325,7 +306,7 @@
                 text = resultLines.join('\n').trim();
             }
 
-            // 2번: 엑셀용 업체명 추출 (행 수 1:1 보존)
+            // 2번: 엑셀용 업체명 추출
             else if (currentMode === 2) {
                 let lines = text.split(/\r?\n/);
                 let resultLines = lines.map(line => {
@@ -363,33 +344,71 @@
                 text = resultLines.filter(line => line !== '').join('\n');
             }
 
-            // 5번: 국문 제품명 추출
+            // 5번: 국문 제품명 추출 (전면 개선)
             else if (currentMode === 5) {
-                let lines = text.split(/[\r\n]+/);
+                // <br> 태그나 줄바꿈을 모두 엔터(\n)로 표준화
+                let normalized = text.replace(/<br\s*\/?>/gi, '\n');
+                let rawLines = normalized.split(/[\r\n]+/);
                 let resultLines = [];
-                lines.forEach(line => {
+
+                rawLines.forEach(line => {
                     line = line.trim();
                     if (!line) return;
-                    let cleanLine = line.replace(/^(?:국문(?:명|제품명)?|제품명)\s*[:：]\s*/i, '').trim();
-                    if (/[가-힣]/.test(cleanLine)) {
-                        resultLines.push(cleanLine);
+
+                    // 따옴표 제거
+                    line = line.replace(/["“”'‘’]/g, '').trim();
+
+                    // '국문:' 또는 '국문제품명:' 패턴이 들어있는 경우
+                    if (/국문/i.test(line)) {
+                        // 한 줄에 '국문: ... 영문: ...' 이 같이 들어있는 경우 분리
+                        let match = line.match(/(?:국문(?:명|제품명)?|제품명)\s*[:：]\s*([^영문]+)/i);
+                        if (match && match[1]) {
+                            let name = match[1].replace(/영문.*$/i, '').trim();
+                            if (name) resultLines.push(name);
+                        } else {
+                            let clean = line.replace(/^(?:국문(?:명|제품명)?|제품명)\s*[:：]\s*/i, '').trim();
+                            if (clean) resultLines.push(clean);
+                        }
+                    } 
+                    // '국문' 라벨은 없지만 영문 라벨도 아니고 한글이 주를 이루는 줄인 경우
+                    else if (!/영문|eng/i.test(line) && /[가-힣]/.test(line)) {
+                        resultLines.push(line);
                     }
                 });
+
                 text = resultLines.join('\n');
             }
 
-            // 6번: 영문 제품명 추출
+            // 6번: 영문 제품명 추출 (전면 개선)
             else if (currentMode === 6) {
-                let lines = text.split(/[\r\n]+/);
+                let normalized = text.replace(/<br\s*\/?>/gi, '\n');
+                let rawLines = normalized.split(/[\r\n]+/);
                 let resultLines = [];
-                lines.forEach(line => {
+
+                rawLines.forEach(line => {
                     line = line.trim();
                     if (!line) return;
-                    let cleanLine = line.replace(/^(?:영문(?:명|제품명)?|eng(?:lish)?)\s*[:：]\s*/i, '').trim();
-                    if (!/[가-힣]/.test(cleanLine) && /[a-zA-Z]/.test(cleanLine)) {
-                        resultLines.push(cleanLine);
+
+                    // 따옴표 제거
+                    line = line.replace(/["“”'‘’]/g, '').trim();
+
+                    // '영문:' 또는 '영문제품명:' 패턴이 들어있는 경우
+                    if (/영문|eng/i.test(line)) {
+                        let match = line.match(/(?:영문(?:명|제품명)?|eng(?:lish)?)\s*[:：]\s*(.*)$/i);
+                        if (match && match[1]) {
+                            let name = match[1].trim();
+                            if (name) resultLines.push(name);
+                        } else {
+                            let clean = line.replace(/^(?:영문(?:명|제품명)?|eng(?:lish)?)\s*[:：]\s*/i, '').trim();
+                            if (clean) resultLines.push(clean);
+                        }
+                    } 
+                    // 영문 라벨은 없지만 국문 라벨도 없고 한글이 전혀 없는 순수 영문 줄인 경우
+                    else if (!/국문/i.test(line) && !/[가-힣]/.test(line) && /[a-zA-Z]/.test(line)) {
+                        resultLines.push(line);
                     }
                 });
+
                 text = resultLines.join('\n');
             }
 
@@ -400,7 +419,7 @@
                 let resultLines = [];
 
                 lines.forEach(line => {
-                    let cleanLine = line.replace(/["“”]/g, '').trim();
+                    let cleanLine = line.replace(/["“”'‘’]/g, '').trim();
                     if (cleanLine && !seen.has(cleanLine)) {
                         seen.add(cleanLine);
                         resultLines.push(cleanLine);
@@ -409,7 +428,7 @@
                 text = resultLines.join('\n');
             }
 
-            outputText.innerText = text;
+            outputText.innerText = text || '결과가 없습니다.';
         } catch (err) {
             outputText.innerText = '처리 중 오류가 발생했습니다.';
             console.error(err);
@@ -418,7 +437,7 @@
 
     function copyResult() {
         const text = outputText.innerText;
-        if (!text || text === '텍스트를 입력해 주세요.' || text === '처리 중 오류가 발생했습니다.') return;
+        if (!text || text === '텍스트를 입력해 주세요.' || text === '결과가 없습니다.' || text === '처리 중 오류가 발생했습니다.') return;
 
         navigator.clipboard.writeText(text).then(() => {
             const originalText = copyBtn.innerText;
