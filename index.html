@@ -245,18 +245,21 @@
         // 4. 괄호 비고 전체 제거
         name = name.replace(/\([^)]*\)/g, ' ');
 
-        // 5. Raw data / Rawdata / Data / CRF 등 복합 비고 문구 선제거
+        // 5. 복합 비고 문구 선제거 (Raw data, CRF, Draft 등)
         name = name.replace(/\braw\s*data\b.*$/i, '');
         name = name.replace(/\bcrf\b.*$/i, '');
+        name = name.replace(/[\s_\-]*\bdraft\b.*$/i, '');
+        name = name.replace(/[\s_\-]*드래프트.*$/i, '');
 
-        // 6. 주차 및 언더바/하이픈 뒤에 붙은 주차/비고 선제거 (예: _4주Y, 4주 등)
+        // 6. 주차 및 언더바/하이픈 뒤에 붙은 주차/비고 선제거
         name = name.replace(/[\s_\-]*\d+주(?:차)?.*$/i, '');
 
-        // 7. 비고/시험/효능 키워드 목록 (안면, 리프팅 등 대폭 추가)
+        // 7. 비고/시험/효능 키워드 목록 ('원본이미지', '원본', '이미지' 추가)
         const stopWords = [
             '안면', '리프팅', '피부', '탄력', '개선', '개선율', '보습', '주름', '미백', 
             '진정', '모공', '각질', '피지', '눈가', '팔자', '볼', '이중턱', '자극', '외', 
-            '결과데이터', '결과', '데이터', '보고서', '발행', '선발행', '지연', '전성분', '취소', '보류'
+            '결과데이터', '결과', '데이터', '보고서', '발행', '선발행', '지연', '전성분', 
+            '취소', '보류', '원본이미지', '원본', '이미지'
         ];
 
         name = name.replace(/[_]+/g, ' ');
@@ -284,7 +287,7 @@
         return name.replace(/\s{2,}/g, ' ').trim();
     }
 
-    const excludeList = ['결과데이터', '데이터', '결과', 'rawdata', '보고서', 'crf', 'raw'];
+    const excludeList = ['결과데이터', '데이터', '결과', 'rawdata', '보고서', 'crf', 'raw', 'draft'];
     function isInvalidCompany(name) {
         if (!name) return true;
         let compact = name.replace(/\s+/g, '').toLowerCase();
