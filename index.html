@@ -239,30 +239,32 @@
         // 2. 비고 구분 특수기호(>, ▶, →, |) 뒷부분 전체 제거
         name = name.replace(/[\>▶→\|].*$/, '');
 
-        // 3. 법인명 및 관련 기호 제거
+        // 3. Draft / 드래프트 / Dr 등 문구 최우선 통째 제거 (구분기호 _, -, 공백 포함)
+        name = name.replace(/(?:[\s_\-\/]+)?(?:draft|드래프트|dr\b).*$/i, '');
+
+        // 4. Raw data, CRF 복합 문구 선제거
+        name = name.replace(/(?:[\s_\-\/]+)?raw\s*data.*$/i, '');
+        name = name.replace(/(?:[\s_\-\/]+)?crf.*$/i, '');
+
+        // 5. 법인명 및 관련 기호 제거
         name = name.replace(/\((?:주|유|합|사|재)\)|주식회사|유한회사|주\.|㈜|㈲/g, ' ');
 
-        // 4. 괄호 비고 전체 제거
+        // 6. 괄호 비고 전체 제거
         name = name.replace(/\([^)]*\)/g, ' ');
 
-        // 5. 복합 비고 문구 선제거 (Raw data, CRF, Draft 등)
-        name = name.replace(/\braw\s*data\b.*$/i, '');
-        name = name.replace(/\bcrf\b.*$/i, '');
-        name = name.replace(/[\s_\-]*\bdraft\b.*$/i, '');
-        name = name.replace(/[\s_\-]*드래프트.*$/i, '');
-
-        // 6. 주차 및 언더바/하이픈 뒤에 붙은 주차/비고 선제거
+        // 7. 주차 및 언더바/하이픈 뒤에 붙은 주차 선제거 (예: _4주Y, 4주 등)
         name = name.replace(/[\s_\-]*\d+주(?:차)?.*$/i, '');
 
-        // 7. 비고/시험/효능 키워드 목록 ('원본이미지', '원본', '이미지' 추가)
+        // 8. 언더바를 공백으로 치환
+        name = name.replace(/[_]+/g, ' ');
+
+        // 9. 비고/시험/효능 키워드 토큰 필터링
         const stopWords = [
             '안면', '리프팅', '피부', '탄력', '개선', '개선율', '보습', '주름', '미백', 
             '진정', '모공', '각질', '피지', '눈가', '팔자', '볼', '이중턱', '자극', '외', 
             '결과데이터', '결과', '데이터', '보고서', '발행', '선발행', '지연', '전성분', 
-            '취소', '보류', '원본이미지', '원본', '이미지'
+            '취소', '보류', '원본이미지', '원본', '이미지', 'draft', 'dr'
         ];
-
-        name = name.replace(/[_]+/g, ' ');
 
         let tokens = name.trim().split(/\s+/);
         let cleanTokens = [];
@@ -276,18 +278,18 @@
 
         name = cleanTokens.join(' ');
 
-        // 8. LAB 보호 및 끝머리 꼬리 영문 제거
+        // 10. LAB 보호 및 끝머리 꼬리 영문 제거
         name = name.replace(/LAB\b/g, '__KEEP_LAB__');
         name = name.replace(/[A-Za-z]{1,3}\s*$/g, '');
         name = name.replace(/__KEEP_LAB__/g, 'LAB');
 
-        // 9. 잔여 특수기호 정리
+        // 11. 잔여 특수기호 정리
         name = name.replace(/[\+\-_/\\&~*\"\'\(\)\[\]]/g, ' ');
 
         return name.replace(/\s{2,}/g, ' ').trim();
     }
 
-    const excludeList = ['결과데이터', '데이터', '결과', 'rawdata', '보고서', 'crf', 'raw', 'draft'];
+    const excludeList = ['결과데이터', '데이터', '결과', 'rawdata', '보고서', 'crf', 'raw', 'draft', 'dr'];
     function isInvalidCompany(name) {
         if (!name) return true;
         let compact = name.replace(/\s+/g, '').toLowerCase();
